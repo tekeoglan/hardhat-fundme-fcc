@@ -1,0 +1,41 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/FundMe.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport \"./PriceConverter.sol\";\n\ncontract FundMe {\n    // we can call now priceConverter functions with uint256 values.\n    using PriceConverter for uint256;\n    // constant and immutable veriables are much gas efficient.\n    uint256 public constant MINUMUM_USD = 50 * 10**18;\n\n    address[] public funders;\n    mapping(address => uint256) public adressToAmountOfFunded;\n    address public immutable i_owner;\n\n    AggregatorV3Interface public priceFeed;\n\n    constructor(address priceFeedAddress) {\n        i_owner = msg.sender;\n        priceFeed = AggregatorV3Interface(priceFeedAddress);\n    }\n\n    // In order to send or withdraw money with function you need to mark the\n    // function by payable keyword.\n    function fund() public payable {\n        // msg.value got used into getConversionRate as firstparameter.\n        require(\n            msg.value.getConversionRate(priceFeed) >= MINUMUM_USD,\n            \"You need to spend more ETH\"\n        );\n        funders.push(msg.sender);\n        adressToAmountOfFunded[msg.sender] = msg.value;\n    }\n\n    function withdraw() public onlyOwner {\n        for (uint256 i = 0; i < funders.length; i++) {\n            address funder = funders[i];\n            adressToAmountOfFunded[funder] = 0;\n        }\n        // reset the array\n        funders = new address[](0);\n\n        // 3 steps for withdrawing the funds\n        // 1.transfering\n        // payable(msg.sender).transfer(address(thsi).balance);\n        // you need to cast address to payable so you could use transfer functions alike.\n        // if transfers fails, program will throw an error and return back the money.\n        // 2.sending\n        // bool success = payable(msg.sender).send(address(this).balance);\n        // require(success, \"Sending failed\");\n        // when you use send method, method will return bool then you use it with\n        // require function to return back the money.\n        // 3.calling (recomended)\n        (bool callSuccess, ) = payable(msg.sender).call{\n            value: address(this).balance\n        }(\"\");\n        require(callSuccess, \"call failed\");\n    }\n\n    modifier onlyOwner() {\n        require(msg.sender == i_owner, \"Only the owner withdraws the funds.\");\n        // The underscore represents here is the rest of the code.\n        _;\n    }\n\n    // sending money without fund method.\n    receive() external payable {\n        fund();\n    }\n\n    // receiving money with data.\n    fallback() external payable {\n        fund();\n    }\n}\n"
+    },
+    "contracts/PriceConverter.sol": {
+      "content": "//SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.0;\r\nimport \"@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol\";\r\n\r\n// libraries can't have state variables, functions can't send eth or withdraw it.\r\n// all libraries functions are internal\r\nlibrary PriceConverter {\r\n    function getPrice(AggregatorV3Interface priceFeed)\r\n        internal\r\n        view\r\n        returns (uint256)\r\n    {\r\n        (, int256 price, , , ) = priceFeed.latestRoundData();\r\n        return uint256(price * 1e10);\r\n    }\r\n\r\n    function getConversionRate(\r\n        uint256 ethAmounth,\r\n        AggregatorV3Interface priceFeed\r\n    ) internal view returns (uint256) {\r\n        uint256 ethPrice = getPrice(priceFeed);\r\n        uint256 ethAmounthInUsd = (ethPrice * ethAmounth) / 1e18;\r\n        return ethAmounthInUsd;\r\n    }\r\n}\r\n"
+    },
+    "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ninterface AggregatorV3Interface {\n  function decimals() external view returns (uint8);\n\n  function description() external view returns (string memory);\n\n  function version() external view returns (uint256);\n\n  // getRoundData and latestRoundData should both raise \"No data present\"\n  // if they do not have data to report, instead of returning unset values\n  // which could be misinterpreted as actual reported values.\n  function getRoundData(uint80 _roundId)\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n\n  function latestRoundData()\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": false,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
